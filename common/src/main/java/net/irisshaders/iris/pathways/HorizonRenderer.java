@@ -1,13 +1,14 @@
 package net.irisshaders.iris.pathways;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
-import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
@@ -17,6 +18,7 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
@@ -41,6 +43,7 @@ public class HorizonRenderer {
 	 * between the bottom and top skybox planes.
 	 */
 	private static final float BOTTOM = -16.0F;
+	private final ByteBufferBuilder storage;
 
 	private GpuBuffer buffer;
 	private int currentRenderDistance;
@@ -49,6 +52,7 @@ public class HorizonRenderer {
 
 	public HorizonRenderer() {
 		currentRenderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance();
+		this.storage = new ByteBufferBuilder(1024);
 
 		rebuildBuffer();
 	}
@@ -58,7 +62,7 @@ public class HorizonRenderer {
 			this.buffer.close();
 		}
 
-		BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION);
+		BufferBuilder buffer = new BufferBuilder(storage, PrimitiveTopology.TRIANGLE_FAN, DefaultVertexFormat.POSITION);
 
 		buildHorizon(currentRenderDistance * 16, buffer);
 		MeshData meshData = buffer.buildOrThrow();
@@ -66,7 +70,7 @@ public class HorizonRenderer {
 		this.buffer = RenderSystem.getDevice().createBuffer(() -> "Horizon", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, meshData.vertexBuffer());
 		this.indexCount = meshData.drawState().indexCount();
 		meshData.close();
-		Tesselator.getInstance().clear();
+		storage.clear();
 	}
 
 	private void buildHorizon(int radius, VertexConsumer consumer) {
@@ -92,18 +96,18 @@ public class HorizonRenderer {
 			rebuildBuffer();
 		}
 
-		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.TRIANGLE_FAN);
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.TRIANGLE_FAN);
 		GpuBuffer indexBuffer = indices.getBuffer(indexCount);
-		GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().writeTransform(modelView, fogColor, new Vector3f(), new Matrix4f());
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Sky", Minecraft.getInstance().getMainRenderTarget().getColorTextureView(), OptionalInt.empty(),
-			Minecraft.getInstance().getMainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
+		GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().writeTransform((Matrix4f) modelView, fogColor, new Vector3f(), new Matrix4f());
+		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Sky", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), Optional.empty(),
+			Minecraft.getInstance().gameRenderer.mainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform("DynamicTransforms", gpuBufferSlice);
 
-			pass.setVertexBuffer(0, buffer);
+			pass.setVertexBuffer(0, buffer.slice());
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			pass.setPipeline(RenderPipelines.SKY);
-			pass.drawIndexed(0, 0, indexCount, 1);
+			pass.drawIndexed(indexCount, 1, 0, 0, 0);
 		}
 	}
 

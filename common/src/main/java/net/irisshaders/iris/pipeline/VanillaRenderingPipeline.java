@@ -10,7 +10,6 @@ import net.irisshaders.iris.features.FeatureFlags;
 import net.irisshaders.iris.gl.texture.TextureType;
 import net.irisshaders.iris.helpers.Tri;
 import net.irisshaders.iris.mixin.LevelRendererAccessor;
-import net.irisshaders.iris.pipeline.programs.SodiumPrograms;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.shaderpack.properties.CloudSetting;
 import net.irisshaders.iris.shaderpack.properties.ParticleRenderingSettings;
@@ -20,6 +19,8 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import org.lwjgl.opengl.ARBClipControl;
+import org.lwjgl.opengl.GL;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -38,6 +39,7 @@ public class VanillaRenderingPipeline implements WorldRenderingPipeline {
 
 	@Override
 	public void beginLevelRendering() {
+
 		// Use the default Minecraft framebuffer and ensure that no programs are in use
 		GlStateManager._glUseProgram(0);
 	}
@@ -115,12 +117,6 @@ public class VanillaRenderingPipeline implements WorldRenderingPipeline {
 	@Override
 	public void destroy() {
 		// stub: nothing to do here
-	}
-
-	@Override
-	public SodiumPrograms getSodiumPrograms() {
-		// no shaders to override
-		return null;
 	}
 
 	@Override

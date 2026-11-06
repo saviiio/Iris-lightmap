@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("idea")
-    id("net.fabricmc.fabric-loom") version("1.15.4")
+    id("net.fabricmc.fabric-loom") version("1.17.20")
 }
 
 evaluationDependsOn(":common")
@@ -15,6 +15,7 @@ val MOD_VERSION: String by rootProject.extra
 
 repositories {
     mavenLocal()
+    maven("https://maven.caffeinemc.net/releases")
     exclusiveContent {
         forRepository {
             maven {
@@ -46,6 +47,11 @@ dependencies {
         runtimeOnly(module)
     }
 
+    fun addCompileFabricModule(name: String) {
+        val module = fabricApi.module(name, FABRIC_API_VERSION)
+        compileOnly(module)
+    }
+
     fun addEmbeddedFabricModule(name: String) {
         val module = fabricApi.module(name, FABRIC_API_VERSION)
         implementation(module)
@@ -65,6 +71,7 @@ dependencies {
     addRuntimeFabricModule("fabric-resource-loader-v0")
     addRuntimeFabricModule("fabric-lifecycle-events-v1")
     addRuntimeFabricModule("fabric-renderer-api-v1")
+    addCompileFabricModule("fabric-renderer-api-v1")
 
     implementation(SODIUM_DEPENDENCY_FABRIC)
     implementAndInclude("org.antlr:antlr4-runtime:4.13.1")
@@ -105,15 +112,6 @@ loom {
             runDir("run")
            // vmArgs("-Dmixin.debug.export=true")
            // vmArg("-XX:+AllowEnhancedClassRedefinition")
-        }
-        create("clientWithRenderdoc") {
-            client()
-            configName = "Fabric Client"
-            ideConfigGenerated(true)
-            runDir("run")
-            environmentVariable("LD_PRELOAD", "/home/ims/renderdoc/build/lib/librenderdoc.so")
-            vmArgs("-DMC_DEBUG_ENABLED=true", "-DMC_DEBUG_DUMP_TEXTURE_ATLAS=true")
-            programArgs("--renderDebugLabels")
         }
     }
 }

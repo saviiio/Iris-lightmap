@@ -3,6 +3,7 @@ package net.irisshaders.iris.pipeline;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlBuffer;
 import com.mojang.blaze3d.opengl.GlConst;
@@ -78,7 +79,8 @@ public class CompositeRenderer {
 		.withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
 		.withColorTargetState(ColorTargetState.DEFAULT)
 		.withLocation(Identifier.fromNamespaceAndPath("iris", "composite")).withVertexShader("core/screenquad").withFragmentShader("core/blit_screen")
-		.withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+		.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+		.withPrimitiveTopology(PrimitiveTopology.QUADS)
 		.build();
 
 	private final RenderTargets renderTargets;
@@ -272,10 +274,10 @@ public class CompositeRenderer {
 
 		GLDebug.pushGroup(20 + compositePass.ordinal(), compositePass.name().toLowerCase(Locale.ROOT));
 
-		com.mojang.blaze3d.pipeline.RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
+		com.mojang.blaze3d.pipeline.RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 
-		GpuBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).getBuffer(6);
-		VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+		GpuBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6);
+		var type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 
 		FullScreenQuadRenderer.INSTANCE.bind();
 		GlStateManager._colorMask(15);
@@ -319,6 +321,8 @@ public class CompositeRenderer {
 			int beginWidth = (int) (compositePass.viewWidth * compositePass.viewportScale.viewportX());
 			int beginHeight = (int) (compositePass.viewHeight * compositePass.viewportScale.viewportY());
 			GlStateManager._viewport(beginWidth, beginHeight, (int) scaledWidth, (int) scaledHeight);
+			GlStateManager._scissorBox(beginWidth, beginHeight, (int) scaledWidth, (int) scaledHeight);
+			GlStateManager._disableScissorTest();
 
 			compositePass.program.use();
 
@@ -365,7 +369,7 @@ public class CompositeRenderer {
 			source.getName(),
 			source.getVertexSource().orElseThrow(NullPointerException::new),
 			source.getGeometrySource().orElse(null),
-			source.getFragmentSource().orElseThrow(NullPointerException::new), textureStage, pipeline.getTextureMap());
+			source.getFragmentSource().orElseThrow(NullPointerException::new), textureStage, pipeline.getTextureMap(), pipeline.getTextureOverrides(textureStage));
 		String vertex = transformed.get(PatchShaderType.VERTEX);
 		String geometry = transformed.get(PatchShaderType.GEOMETRY);
 		String fragment = transformed.get(PatchShaderType.FRAGMENT);
@@ -429,7 +433,7 @@ public class CompositeRenderer {
 				ProgramBuilder builder;
 
 				try {
-					String transformed = TransformPatcher.patchCompute(source.getName(), source.getSource().orElse(null), textureStage, pipeline.getTextureMap());
+					String transformed = TransformPatcher.patchCompute(source.getName(), source.getSource().orElse(null), textureStage, pipeline.getTextureMap(), pipeline.getTextureOverrides(textureStage));
 
 					ShaderPrinter.printProgram(source.getName()).addSource(PatchShaderType.COMPUTE, transformed).print();
 
@@ -508,12 +512,13 @@ public class CompositeRenderer {
 
 		@Override
 		public void setupState() {
+			GlStateManager._colorMask(0xFFFFFFFF);
 			framebuffer.bind();
 			if (blendModeOverride != null) {
 				blendModeOverride.apply();
 			} else {
 				BlendModeStorage.restoreBlend();
-				GlStateManager._disableBlend();
+				GlStateManager._disableBlend(0);
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package net.irisshaders.iris.pipeline;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -61,6 +62,7 @@ import org.lwjgl.opengl.GL46C;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -130,8 +132,8 @@ public class FinalPassRenderer {
 		// passes that write to framebuffers).
 		this.baseline = renderTargets.createGbufferFramebuffer(flippedBuffers, new int[]{0});
 		this.colorHolder = new GlFramebuffer();
-		this.lastColorTextureId = Minecraft.getInstance().getMainRenderTarget().getColorTexture().iris$getGlId();
-		this.lastColorTextureVersion = ((Blaze3dRenderTargetExt) Minecraft.getInstance().getMainRenderTarget()).iris$getColorBufferVersion();
+		this.lastColorTextureId = Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTexture().iris$getGlId();
+		this.lastColorTextureVersion = ((Blaze3dRenderTargetExt) Minecraft.getInstance().gameRenderer.mainRenderTarget()).iris$getColorBufferVersion();
 		this.colorHolder.addColorAttachment(0, lastColorTextureId);
 
 		// TODO: We don't actually fully swap the content, we merely copy it from alt to main
@@ -195,7 +197,7 @@ public class FinalPassRenderer {
 	}
 
 	public void renderFinalPass() {
-		final com.mojang.blaze3d.pipeline.RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
+		final com.mojang.blaze3d.pipeline.RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 		final int baseWidth = main.width;
 		final int baseHeight = main.height;
 
@@ -241,25 +243,25 @@ public class FinalPassRenderer {
 				}
 			}
 
-			GpuBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).getBuffer(6);
-			VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+			GpuBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6);
+			var type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 
-			try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Final pass", Minecraft.getInstance().getMainRenderTarget().getColorTextureView(), OptionalInt.empty())) {
+			try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Final pass", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), Optional.empty())) {
 				renderPass.setPipeline(CompositeRenderer.COMPOSITE_PIPELINE);
 				renderPass.setIndexBuffer(indices, type);
-				renderPass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad());
+				renderPass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad().slice());
 
 				renderPass.iris$setCustomPass(STATE);
 
 				finalPass.program.use();
 
 				BlendModeOverride.restore();
-				GlStateManager._disableBlend();
+				GlStateManager._disableBlend(0);
 
 				// program is the identifier for final :shrug:
 				this.customUniforms.push(finalPass.program);
 
-				renderPass.drawIndexed(0, 0, 6, 1);
+				renderPass.drawIndexed(6, 1, 0, 0, 0);
 			}
 			GLDebug.popGroup();
 		} else {
@@ -337,7 +339,7 @@ public class FinalPassRenderer {
 			source.getName(),
 			source.getVertexSource().orElseThrow(NullPointerException::new),
 			source.getGeometrySource().orElse(null),
-			source.getFragmentSource().orElseThrow(NullPointerException::new), TextureStage.COMPOSITE_AND_FINAL, pipeline.getTextureMap());
+			source.getFragmentSource().orElseThrow(NullPointerException::new), TextureStage.COMPOSITE_AND_FINAL, pipeline.getTextureMap(), pipeline.getTextureOverrides(TextureStage.COMPOSITE_AND_FINAL));
 		String vertex = transformed.get(PatchShaderType.VERTEX);
 		String geometry = transformed.get(PatchShaderType.GEOMETRY);
 		String fragment = transformed.get(PatchShaderType.FRAGMENT);
@@ -400,7 +402,7 @@ public class FinalPassRenderer {
 				ProgramBuilder builder;
 
 				try {
-					String transformed = TransformPatcher.patchCompute(source.getName(), source.getSource().orElse(null), TextureStage.COMPOSITE_AND_FINAL, pipeline.getTextureMap());
+					String transformed = TransformPatcher.patchCompute(source.getName(), source.getSource().orElse(null), TextureStage.COMPOSITE_AND_FINAL, pipeline.getTextureMap(), pipeline.getTextureOverrides(TextureStage.COMPOSITE_AND_FINAL));
 
 					ShaderPrinter.printProgram(source.getName()).addSource(PatchShaderType.COMPUTE, transformed).print();
 

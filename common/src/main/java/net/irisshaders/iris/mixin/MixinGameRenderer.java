@@ -1,6 +1,8 @@
 package net.irisshaders.iris.mixin;
 
 import com.google.common.collect.Lists;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.platform.GLX;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -16,6 +18,7 @@ import net.irisshaders.iris.shadows.ShadowRenderer;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.uniforms.SystemTimeUniforms;
 import net.irisshaders.iris.vertices.ImmediateState;
+import net.minecraft.client.Camera;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.util.Util;
 import net.minecraft.client.DeltaTracker;
@@ -23,7 +26,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
-import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -56,33 +58,45 @@ public class MixinGameRenderer {
 	}
 
 	@Inject(method = "<init>", at = @At("TAIL"))
-	private void iris$logSystem(Minecraft minecraft, ItemInHandRenderer itemInHandRenderer, RenderBuffers renderBuffers, ModelManager modelManager, CallbackInfo ci) {
+	private void iris$logSystem(Minecraft minecraft, ItemInHandRenderer itemInHandRenderer, ModelManager modelManager, CallbackInfo ci) {
 		Iris.logger.info("Hardware information:");
 		Iris.logger.info("CPU: " + GLX._getCpuInfo());
-		Iris.logger.info("GPU: " + RenderSystem.getDevice().getRenderer() + " (Supports OpenGL " + RenderSystem.getDevice().getVersion() + ")");
+		Iris.logger.info("GPU: " + RenderSystem.getDevice().getDeviceInfo().name() + " (Supports OpenGL " + RenderSystem.getDevice().getDeviceInfo().driverInfo() + ")");
 		Iris.logger.info("OS: " + System.getProperty("os.name") + " (" + System.getProperty("os.version") + ")");
 	}
 
 	@ModifyArgs(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlobalSettingsUniform;update(IIDJLnet/minecraft/client/DeltaTracker;ILnet/minecraft/world/phys/Vec3;Z)V"))
 	private void iris$modifyBlur(Args args) {
-		if (this.minecraft.screen instanceof ShaderPackScreen sps) {
+		if (this.minecraft.gui.screen() instanceof ShaderPackScreen sps) {
 			// TODO 1.21.6
 			float f = Math.min(this.minecraft.options.getMenuBackgroundBlurriness(), sps.blurTransition.getAsFloat());
 			args.set(5, (int) f); // TODO what?
 		}
 	}
 
-	@Redirect(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;renderHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/player/LocalPlayer;I)V"))
+	@Redirect(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;submitHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/player/LocalPlayer;I)V"))
 	private void iris$disableVanillaHandRendering(ItemInHandRenderer itemInHandRenderer, float tickDelta, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LocalPlayer localPlayer, int light) {
 		if (Iris.isPackInUseQuick()) {
 			return;
 		}
 
-		itemInHandRenderer.renderHandsWithItems(tickDelta, poseStack, submitNodeCollector, localPlayer, light);
+		itemInHandRenderer.submitHandsWithItems(tickDelta, poseStack, submitNodeCollector, localPlayer, light);
 	}
 
 	@Inject(method = "renderLevel", at = @At("TAIL"))
 	private void iris$runColorSpace(DeltaTracker deltaTracker, CallbackInfo ci) {
 		Iris.getPipelineManager().getPipeline().ifPresent(WorldRenderingPipeline::finalizeGameRendering);
+	}
+
+	// Set isRenderingLevel to trigger undo reverse z in other mixin.
+	// This is the place where vanilla generate projection matrix from data, then captured by sodium and iris.
+	@Inject(method = "extract", at = @At(value = "HEAD"))
+	private void iris$undoReverseZ(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+		ImmediateState.isRenderingLevel = true;
+	}
+
+	@Inject(method = "extract", at = @At(value = "RETURN"))
+	private void iris$restoreReverseZ(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+		ImmediateState.isRenderingLevel = false;
 	}
 }

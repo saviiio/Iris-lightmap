@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.function.BooleanSupplier;
 
 public enum FeatureFlags {
+	PER_PIXEL_LIGHTMAP(() -> true, () -> true),
 	SEPARATE_HARDWARE_SAMPLERS(() -> true, () -> true),
 	HIGHER_SHADOWCOLOR(() -> true, () -> true),
 	CUSTOM_IMAGES(() -> true, IrisRenderSystem::supportsImageLoadStore),

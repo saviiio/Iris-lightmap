@@ -164,7 +164,7 @@ public class MixinSodiumWorldRenderer implements ShadowRenderListAccess {
 			remap = false))
 	private boolean iris$forceChunkGraphRebuildInShadowPass(RenderSectionManager instance) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			float sunAngle = Minecraft.getInstance().gameRenderer.getMainCamera().attributeProbe().getValue(EnvironmentAttributes.SUN_ANGLE, CapturedRenderingState.INSTANCE.getTickDelta());
+			float sunAngle = Minecraft.getInstance().gameRenderer.mainCamera().attributeProbe().getValue(EnvironmentAttributes.SUN_ANGLE, CapturedRenderingState.INSTANCE.getTickDelta());
 			if (lastSunAngle != sunAngle) {
 				lastSunAngle = sunAngle;
 				return true;

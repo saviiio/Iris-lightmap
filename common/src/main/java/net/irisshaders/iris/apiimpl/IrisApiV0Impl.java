@@ -95,6 +95,6 @@ public class IrisApiV0Impl implements IrisApi {
 
 	@Override
 	public boolean isReverseZDuringShaders() {
-		return false;
+		return !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
 	}
 }

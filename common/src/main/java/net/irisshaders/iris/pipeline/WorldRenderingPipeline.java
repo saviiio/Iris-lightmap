@@ -5,9 +5,9 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.features.FeatureFlags;
 import net.irisshaders.iris.gl.texture.TextureType;
+import net.irisshaders.iris.gl.sampler.SamplerHolder;
 import net.irisshaders.iris.helpers.Tri;
 import net.irisshaders.iris.mixin.LevelRendererAccessor;
-import net.irisshaders.iris.pipeline.programs.SodiumPrograms;
 import net.irisshaders.iris.shaderpack.properties.CloudSetting;
 import net.irisshaders.iris.shaderpack.properties.ParticleRenderingSettings;
 import net.irisshaders.iris.shaderpack.texture.TextureStage;
@@ -17,8 +17,12 @@ import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 
 import java.util.OptionalInt;
+import java.util.Set;
 
 public interface WorldRenderingPipeline {
+	default void addPixelLightmapSampler(SamplerHolder samplers) {
+	}
+
 	void beginLevelRendering();
 
     void renderShadows(LevelRendererAccessor worldRenderer, Camera playerCamera, CameraRenderState renderState);
@@ -28,6 +32,10 @@ public interface WorldRenderingPipeline {
 	OptionalInt getForcedShadowRenderDistanceChunksForDisplay();
 
 	Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> getTextureMap();
+
+	default Set<String> getTextureOverrides(TextureStage stage) {
+		return Set.of();
+	}
 
 	WorldRenderingPhase getPhase();
 
@@ -50,8 +58,6 @@ public interface WorldRenderingPipeline {
 	void finalizeGameRendering();
 
 	void destroy();
-
-	SodiumPrograms getSodiumPrograms();
 
 	FrameUpdateNotifier getFrameUpdateNotifier();
 

@@ -16,8 +16,6 @@ import net.irisshaders.iris.pipeline.transform.parameter.SodiumParameters;
 public class SodiumCoreTransformer {
 	public static final AutoHintedMatcher<ExternalDeclaration> modelViewMatrix = new AutoHintedMatcher<>(
 		"uniform mat4 modelViewMatrix;", ParseShape.EXTERNAL_DECLARATION);
-	public static final AutoHintedMatcher<ExternalDeclaration> normalMatrix = new AutoHintedMatcher<>(
-		"uniform mat3 normalMatrix;", ParseShape.EXTERNAL_DECLARATION);
 	public static final AutoHintedMatcher<ExternalDeclaration> projectionMatrix = new AutoHintedMatcher<>(
 		"uniform mat4 projectionMatrix;", ParseShape.EXTERNAL_DECLARATION);
 	public static void transform(
@@ -25,17 +23,15 @@ public class SodiumCoreTransformer {
 		TranslationUnit tree,
 		Root root,
 		SodiumParameters parameters) {
-		String objectType = parameters.shadow ? "Shadow" : "Default";
-
 		root.rename("alphaTestRef", "iris_currentAlphaTest");
 		root.processMatches(t, modelViewMatrix, ASTNode::detachAndDelete);
 		root.rename("modelViewMatrix", "u_ModelViewMatrix");
-		root.rename("modelViewMatrixInverse", "iris_" + objectType + "ModelViewMatrixInverse");
+		root.rename("modelViewMatrixInverse", "iris_ModelViewMatInverse");
 		root.processMatches(t, projectionMatrix, ASTNode::detachAndDelete);
-		root.processMatches(t, normalMatrix, ASTNode::detachAndDelete);
-		root.rename("projectionMatrix", "u_ProjectionMatrix");
-		root.rename("projectionMatrixInverse", "iris_" + objectType + "ProjectionMatrixInverse");
-		root.replaceReferenceExpressions(t, "normalMatrix", "mat3(u_ModelViewMatrix)");
+		CommonTransformer.injectForwardZProjection(t, tree);
+		root.replaceReferenceExpressions(t, "projectionMatrix", "iris_undoRevZ(u_ProjectionMatrix)");
+		root.rename("projectionMatrixInverse", "iris_ProjMatInverse");
+		root.rename("normalMatrix", "iris_NormalMat");
 		root.rename("chunkOffset", "u_RegionOffset");
 		if (parameters.type == PatchShaderType.VERTEX) {
 			boolean needsNormal = root.identifierIndex.has("vaNormal") || root.identifierIndex.has("at_tangent");
@@ -52,6 +48,7 @@ public class SodiumCoreTransformer {
 			root.replaceReferenceExpressions(t, "textureMatrix", "mat4(1.0)");
 			SodiumTransformer.replaceMidTexCoord(t, tree, root, 1.0f / 32768.0f);
 			SodiumTransformer.replaceMCEntity(t, tree, root);
+			CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 			SodiumTransformer.injectVertInit(t, tree, root, parameters, needsNormal);
 		}

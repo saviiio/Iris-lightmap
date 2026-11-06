@@ -12,6 +12,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -173,8 +174,8 @@ public class IrisExclusiveUniforms {
 
 	private static boolean isHeavyFog() {
 		if (Minecraft.getInstance().level != null) {
-			Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-			return  Minecraft.getInstance().gui.getBossOverlay().shouldCreateWorldFog();
+			Camera camera = Minecraft.getInstance().gameRenderer.mainCamera();
+			return  Minecraft.getInstance().gui.hud.getBossOverlay().shouldCreateWorldFog();
 		}
 
 		return false;
@@ -197,7 +198,7 @@ public class IrisExclusiveUniforms {
 		HitResult hitResult = Minecraft.getInstance().hitResult;
 		if (Minecraft.getInstance().level != null && ((GameRendererAccessor) Minecraft.getInstance().gameRenderer).shouldRenderBlockOutlineA() && hitResult != null && hitResult.getType() == HitResult.Type.BLOCK) {
 			BlockPos blockPos4 = ((BlockHitResult) hitResult).getBlockPos();
-			return blockPos4.getCenter().subtract(Minecraft.getInstance().gameRenderer.getMainCamera().position()).toVector3f();
+			return new Vec3((double) blockPos4.getX() + 0.5, (double) blockPos4.getY() + 0.5, (double) blockPos4.getZ() + 0.5).subtract(Minecraft.getInstance().gameRenderer.mainCamera().position()).toVector3f();
 		}
 
 		return new Vector3f(-256.0f);
@@ -289,7 +290,7 @@ public class IrisExclusiveUniforms {
 			});
 			uniforms.uniform1f(PER_FRAME, "cloudHeight", () -> {
 				if (level != null) {
-					return Minecraft.getInstance().gameRenderer.getMainCamera().attributeProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
+					return Minecraft.getInstance().gameRenderer.mainCamera().attributeProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
 				} else {
 					return 192.0;
 				}

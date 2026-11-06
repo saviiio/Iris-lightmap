@@ -62,7 +62,6 @@ public class IrisPipelines {
 		assignToMain(RenderPipelines.ENTITY_CUTOUT_Z_OFFSET, p -> ShaderKey.ENTITIES_CUTOUT);
 		assignToMain(RenderPipelines.LIGHTNING, p -> ShaderKey.LIGHTNING);
 		assignToMain(RenderPipelines.DRAGON_RAYS, p -> ShaderKey.LIGHTNING);
-		assignToMain(RenderPipelines.DRAGON_RAYS_DEPTH, p -> ShaderKey.LIGHTNING);
 		assignToMain(RenderPipelines.BEACON_BEAM_OPAQUE, p -> ShaderKey.BEACON);
 		assignToMain(RenderPipelines.BEACON_BEAM_TRANSLUCENT, p -> ShaderKey.BEACON);
 		assignToMain(RenderPipelines.END_PORTAL, p -> ShaderKey.BLOCK_ENTITY);
@@ -72,10 +71,10 @@ public class IrisPipelines {
 		assignToMain(RenderPipelines.TEXT, p -> getText(p));
 		assignToMain(RenderPipelines.TEXT_POLYGON_OFFSET, p -> getText(p));
 		assignToMain(RenderPipelines.TEXT_SEE_THROUGH, p -> getText(p));
-		assignToMain(RenderPipelines.TEXT_INTENSITY_SEE_THROUGH, p -> getTextIntensity(p));
+		assignToMain(RenderPipelines.TEXT_GRAYSCALE_SEE_THROUGH, p -> getTextIntensity(p));
 		assignToMain(RenderPipelines.TEXT_BACKGROUND, p -> ShaderKey.TEXT_BG);
 		assignToMain(RenderPipelines.TEXT_BACKGROUND_SEE_THROUGH, p -> ShaderKey.TEXT_BG);
-		assignToMain(RenderPipelines.TEXT_INTENSITY, p -> getTextIntensity(p));
+		assignToMain(RenderPipelines.TEXT_GRAYSCALE, p -> getTextIntensity(p));
 		assignToMain(RenderPipelines.CRUMBLING, p -> ShaderKey.CRUMBLING);
 		assignToMain(RenderPipelines.LEASH, p -> ShaderKey.LEASH);
 		assignToMain(RenderPipelines.CLOUDS, p -> ShaderKey.CLOUDS);
@@ -119,10 +118,10 @@ public class IrisPipelines {
 		assignToShadow(RenderPipelines.TEXT, p -> ShaderKey.SHADOW_TEXT);
 		assignToShadow(RenderPipelines.TEXT_POLYGON_OFFSET, p -> ShaderKey.SHADOW_TEXT);
 		assignToShadow(RenderPipelines.TEXT_SEE_THROUGH, p -> ShaderKey.SHADOW_TEXT);
-		assignToShadow(RenderPipelines.TEXT_INTENSITY_SEE_THROUGH, p -> ShaderKey.SHADOW_TEXT_INTENSITY);
+		assignToShadow(RenderPipelines.TEXT_GRAYSCALE_SEE_THROUGH, p -> ShaderKey.SHADOW_TEXT_INTENSITY);
 		assignToShadow(RenderPipelines.TEXT_BACKGROUND, p -> ShaderKey.SHADOW_TEXT_BG);
 		assignToShadow(RenderPipelines.TEXT_BACKGROUND_SEE_THROUGH, p -> ShaderKey.SHADOW_TEXT_BG);
-		assignToShadow(RenderPipelines.TEXT_INTENSITY, p -> ShaderKey.SHADOW_TEXT_INTENSITY);
+		assignToShadow(RenderPipelines.TEXT_GRAYSCALE, p -> ShaderKey.SHADOW_TEXT_INTENSITY);
 		assignToShadow(RenderPipelines.WATER_MASK, p -> ShaderKey.SHADOW_BASIC);
 		assignToShadow(RenderPipelines.BEACON_BEAM_OPAQUE, p -> ShaderKey.SHADOW_BEACON_BEAM);
 		assignToShadow(RenderPipelines.BEACON_BEAM_TRANSLUCENT, p -> ShaderKey.SHADOW_BEACON_BEAM);
@@ -131,7 +130,6 @@ public class IrisPipelines {
 		assignToShadow(RenderPipelines.ARMOR_TRANSLUCENT, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
 		assignToShadow(RenderPipelines.LIGHTNING, p -> ShaderKey.SHADOW_LIGHTNING);
 		assignToShadow(RenderPipelines.DRAGON_RAYS, p -> ShaderKey.SHADOW_LIGHTNING);
-		assignToShadow(RenderPipelines.DRAGON_RAYS_DEPTH, p -> ShaderKey.SHADOW_LIGHTNING);
 
 		// Check that all shaders are accounted for
 		//for (RenderPipeline pipeline : RenderPipelines.getStaticPipelines()) {
@@ -223,6 +221,15 @@ public class IrisPipelines {
 
 	@Nullable
 	public static ShaderKey getPipeline(IrisRenderingPipeline pipeline, RenderPipeline shader) {
+        if (shader.getLocation().getNamespace().contains("sodium")) {
+            if (shader.getColorTargetState().blendFunction().isPresent()) {
+                return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? ShaderKey.SHADOW_SODIUM_TERRAIN_TRANSLUCENT : ShaderKey.SODIUM_TERRAIN_TRANSLUCENT;
+            } else if (shader.getShaderDefines().asSourceDirectives().contains("CUTOUT")) {
+                return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? ShaderKey.SHADOW_SODIUM_TERRAIN_CUTOUT : ShaderKey.SODIUM_TERRAIN_CUTOUT;
+            } else {
+                return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? ShaderKey.SHADOW_SODIUM_TERRAIN_SOLID : ShaderKey.SODIUM_TERRAIN_SOLID;
+            }
+        }
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			return coreShaderMapShadow.getOrDefault(shader, FAKE_FUNCTION).apply(pipeline);
 		} else {

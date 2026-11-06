@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("idea")
-    id("net.fabricmc.fabric-loom") version("1.15.4")
+    id("net.fabricmc.fabric-loom") version("1.17.20")
     id("com.github.gmazzo.buildconfig") version "5.3.5"
 }
 
@@ -28,7 +28,7 @@ repositories {
 val MINECRAFT_VERSION: String by rootProject.extra
 val PARCHMENT_VERSION: String? by rootProject.extra
 val FABRIC_LOADER_VERSION: String by rootProject.extra
-val SODIUM_DEPENDENCY_FABRIC: Any by rootProject.extra
+val SODIUM_DEPENDENCY_NEO: Any by rootProject.extra
 val FABRIC_API_VERSION: String by rootProject.extra
 
 sourceSets.create("desktop")
@@ -58,7 +58,7 @@ dependencies {
     compileOnly(fabricApi.module("fabric-block-getter-api-v2", FABRIC_API_VERSION))
     compileOnly(fabricApi.module("fabric-renderer-api-v1", FABRIC_API_VERSION))
 
-    implementation(SODIUM_DEPENDENCY_FABRIC)
+    implementation(SODIUM_DEPENDENCY_NEO)
     compileOnly("org.antlr:antlr4-runtime:4.13.1")
     compileOnly("io.github.douira:glsl-transformer:3.0.0-pre3")
     compileOnly("org.anarres:jcpp:1.4.14")

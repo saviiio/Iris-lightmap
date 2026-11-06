@@ -1,3 +1,10 @@
+# Iris Per-Pixel / World Lightmap — fork experimental
+
+Este fork adiciona um volume de luz por pixel e um método de aplicação de texturas
+contínuas em coordenadas do mundo. Os dois recursos podem ser usados separadamente.
+Instalação, API e limitações: [docs/PerPixelLightmap.md](docs/PerPixelLightmap.md).
+Shaderpack demonstrativo: [examples/per-pixel-lightmap](examples/per-pixel-lightmap).
+
 ![Iris: An open-source shaders mod compatible with OptiFine shader packs](docs/banner.png)
 
 # Iris

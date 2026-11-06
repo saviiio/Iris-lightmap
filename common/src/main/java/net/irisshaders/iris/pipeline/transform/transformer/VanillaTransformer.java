@@ -25,6 +25,7 @@ public class VanillaTransformer {
 		}
 
 		CommonTransformer.transform(t, tree, root, parameters, false);
+		CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 		tree.parseAndInjectNodes(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
 			"const float mc_chunkFade = -1.0;",
@@ -366,7 +367,7 @@ public class VanillaTransformer {
 		}
 		transform.append(")");
 		root.replaceReferenceExpressions(t, "gl_ModelViewMatrix", transform.toString());
-
-		root.rename("gl_ProjectionMatrix", "iris_ProjMat");
+		CommonTransformer.injectForwardZProjection(t, tree);
+		root.replaceReferenceExpressions(t, "gl_ProjectionMatrix", "iris_undoRevZ(iris_ProjMat)");
 	}
 }

@@ -40,6 +40,7 @@ import net.irisshaders.iris.vertices.sodium.IrisEntityToTerrainVertexSerializer;
 import net.irisshaders.iris.vertices.sodium.ModelToEntityVertexSerializer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.util.Util;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -74,6 +75,8 @@ import java.util.Properties;
 import java.util.stream.Stream;
 import java.util.zip.ZipException;
 
+import static net.irisshaders.iris.IrisVKOnly.irisKeybindCategory;
+
 public class Iris {
 	public static final String MODID = "iris";
 
@@ -99,7 +102,6 @@ public class Iris {
 	private static IrisConfig irisConfig;
 	private static FileSystem zipFileSystem;
 	private static KeyMapping reloadKeybind;
-	private static final KeyMapping.Category irisKeybindCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("iris", "keybinds"));
 	private static KeyMapping toggleShadersKeybind;
 	private static KeyMapping shaderpackScreenKeybind;
 	private static KeyMapping wireframeKeybind;
@@ -140,7 +142,7 @@ public class Iris {
 
 		VertexSerializerRegistry.instance().registerSerializer(DefaultVertexFormat.ENTITY, IrisVertexFormats.TERRAIN, new EntityToTerrainVertexSerializer());
 		VertexSerializerRegistry.instance().registerSerializer(IrisVertexFormats.ENTITY, IrisVertexFormats.TERRAIN, new IrisEntityToTerrainVertexSerializer());
-		VertexSerializerRegistry.instance().registerSerializer(DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP, IrisVertexFormats.GLYPH, new GlyphExtVertexSerializer());
+		VertexSerializerRegistry.instance().registerSerializer(DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR, IrisVertexFormats.GLYPH, new GlyphExtVertexSerializer());
 		VertexSerializerRegistry.instance().registerSerializer(DefaultVertexFormat.ENTITY, IrisVertexFormats.ENTITY, new ModelToEntityVertexSerializer());
 
 		// Only load the shader pack when we can access OpenGL
@@ -176,22 +178,25 @@ public class Iris {
 			Iris.loadShaderpack();
 		}
 
-		if (reloadKeybind.consumeClick()) {
-			try {
-				reload();
+		if (Iris.getIrisConfig().areDebugOptionsEnabled()) {
+			if (reloadKeybind.consumeClick()) {
+				try {
+					reload();
 
-				if (minecraft.player != null) {
-					minecraft.player.sendSystemMessage(Component.translatable("iris.shaders.reloaded"));
-				}
+					if (Minecraft.getInstance().player != null) {
+						Minecraft.getInstance().player.sendSystemMessage(Component.translatable("iris.shaders.reloaded"));
+					}
 
-			} catch (Exception e) {
-				logger.error("Error while reloading Shaders for Iris!", e);
+				} catch (Exception e) {
+					logger.error("Error while reloading Shaders for Iris!", e);
 
-				if (minecraft.player != null) {
-					minecraft.player.sendSystemMessage(Component.translatable("iris.shaders.reloaded.failure", Throwables.getRootCause(e).getMessage()).withStyle(ChatFormatting.RED));
+					if (Minecraft.getInstance().player != null) {
+						Minecraft.getInstance().player.sendSystemMessage(Component.translatable("iris.shaders.reloaded.failure", Throwables.getRootCause(e).getMessage()).withStyle(ChatFormatting.RED));
+					}
 				}
 			}
-		} else if (toggleShadersKeybind.consumeClick()) {
+		}
+		if (toggleShadersKeybind.consumeClick()) {
 			try {
 				toggleShaders(minecraft, !irisConfig.areShadersEnabled());
 			} catch (Exception e) {
@@ -204,7 +209,7 @@ public class Iris {
 				fallback = true;
 			}
 		} else if (shaderpackScreenKeybind.consumeClick()) {
-			minecraft.setScreen(new ShaderPackScreen(null));
+			minecraft.gui.setScreen(new ShaderPackScreen(null));
 		} else if (wireframeKeybind.consumeClick()) {
 			if (irisConfig.areDebugOptionsEnabled() && minecraft.player != null && !Minecraft.getInstance().isLocalServer()) {
 				minecraft.player.sendSystemMessage(Component.literal("No cheating; wireframe only in singleplayer!"));
@@ -367,7 +372,7 @@ public class Iris {
 
 	private static void handleException(Exception e) {
 		if (irisConfig.areDebugOptionsEnabled()) {
-			Minecraft.getInstance().setScreen(new DebugLoadFailedGridScreen(Minecraft.getInstance().screen, Component.literal(e instanceof ShaderCompileException ? "Failed to compile shaders" : "Exception"), e));
+			Minecraft.getInstance().gui.setScreen(new DebugLoadFailedGridScreen(Minecraft.getInstance().gui.screen(), Component.literal(e instanceof ShaderCompileException ? "Failed to compile shaders" : "Exception"), e));
 		} else {
 			if (Minecraft.getInstance().player != null) {
 				Minecraft.getInstance().player.sendSystemMessage(Component.translatable(e instanceof ShaderCompileException ? "iris.load.failure.shader" : "iris.load.failure.generic").append(Component.literal("Copy Info").withStyle(arg -> arg.withUnderlined(true).withColor(
@@ -424,7 +429,7 @@ public class Iris {
 			success = GLDebug.setupDebugMessageCallback();
 		} else {
 			GLDebug.reloadDebugState();
-			GlDebug.enableDebugCallback(Minecraft.getInstance().options.glDebugVerbosity, false, new HashSet<>((IrisRenderSystem.getGlDevice()).getEnabledExtensions()));
+			GlDebug.enableDebugCallback(Minecraft.getInstance().options.glDebugVerbosity, false, new HashSet<>((IrisRenderSystem.getGlDevice()).getDeviceInfo().underlyingExtensions()));
 			success = 1;
 		}
 
@@ -768,6 +773,27 @@ public class Iris {
 		return getVersion().split("\\+")[0];
 	}
 
+    public static boolean handleDebugKeys(KeyEvent event) {
+        if (reloadKeybind.matches(event)) {
+            try {
+                reload();
+
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("iris.shaders.reloaded"));
+                }
+
+            } catch (Exception e) {
+                logger.error("Error while reloading Shaders for Iris!", e);
+
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("iris.shaders.reloaded.failure", Throwables.getRootCause(e).getMessage()).withStyle(ChatFormatting.RED));
+                }
+            }
+			return true;
+        }
+		return false;
+    }
+
     /**
 	 * Called very early on in Minecraft initialization. At this point we *cannot* safely access OpenGL, but we can do
 	 * some very basic setup, config loading, and environment checks.
@@ -784,7 +810,7 @@ public class Iris {
 
 		reloadKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.reload", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, irisKeybindCategory));
 		toggleShadersKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.toggleShaders", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, irisKeybindCategory));
-		shaderpackScreenKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, irisKeybindCategory));
+		shaderpackScreenKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_I, irisKeybindCategory));
 		wireframeKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.wireframe", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), irisKeybindCategory));
 
 		DHCompat.run();

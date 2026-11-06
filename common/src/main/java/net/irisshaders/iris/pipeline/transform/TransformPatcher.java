@@ -1,5 +1,6 @@
 package net.irisshaders.iris.pipeline.transform;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import io.github.douira.glsl_transformer.ast.node.Profile;
 import io.github.douira.glsl_transformer.ast.node.TranslationUnit;
 import io.github.douira.glsl_transformer.ast.node.Version;
@@ -8,6 +9,7 @@ import io.github.douira.glsl_transformer.ast.print.PrintType;
 import io.github.douira.glsl_transformer.ast.query.Root;
 import io.github.douira.glsl_transformer.ast.query.RootSupplier;
 import io.github.douira.glsl_transformer.ast.transform.EnumASTTransformer;
+import io.github.douira.glsl_transformer.ast.transform.SingleASTTransformer;
 import io.github.douira.glsl_transformer.ast.transform.TransformationException;
 import io.github.douira.glsl_transformer.parser.ParsingException;
 import io.github.douira.glsl_transformer.token_filter.ChannelFilter;
@@ -19,6 +21,7 @@ import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.gl.IrisLimits;
 import net.irisshaders.iris.gl.blending.AlphaTest;
 import net.irisshaders.iris.gl.shader.ShaderCompileException;
+import net.irisshaders.iris.gl.shader.ShaderType;
 import net.irisshaders.iris.gl.state.ShaderAttributeInputs;
 import net.irisshaders.iris.gl.texture.TextureType;
 import net.irisshaders.iris.helpers.Tri;
@@ -34,6 +37,7 @@ import net.irisshaders.iris.pipeline.transform.transformer.CompositeCoreTransfor
 import net.irisshaders.iris.pipeline.transform.transformer.CompositeTransformer;
 import net.irisshaders.iris.pipeline.transform.transformer.DHGenericTransformer;
 import net.irisshaders.iris.pipeline.transform.transformer.DHTerrainTransformer;
+import net.irisshaders.iris.pipeline.transform.transformer.DepthTransformer;
 import net.irisshaders.iris.pipeline.transform.transformer.LayoutTransformer;
 import net.irisshaders.iris.pipeline.transform.transformer.SodiumCoreTransformer;
 import net.irisshaders.iris.pipeline.transform.transformer.SodiumTransformer;
@@ -49,6 +53,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -198,6 +203,7 @@ public class TransformPatcher {
 					}
 					TextureTransformer.transform(transformer, tree, root,
 						parameters.getTextureStage(), parameters.getTextureMap());
+					CommonTransformer.transformDepth(transformer, tree, root, parameters);
 					CompatibilityTransformer.transformEach(transformer, tree, root, parameters);
 				});
 			}
@@ -208,6 +214,7 @@ public class TransformPatcher {
 			if (IrisLimits.VK_CONFORMANCE) {
 				LayoutTransformer.transformGrouped(transformer, trees, parameters);
 			}
+			CommonTransformer.transformDepthPosition(transformer, trees, parameters);
 		});
 		transformer.setTokenFilter(parseTokenFilter);
 	}
@@ -238,7 +245,7 @@ public class TransformPatcher {
 		CacheKey key;
 		Map<PatchShaderType, String> result = null;
 		if (useCache) {
-			key = new CacheKey(parameters, vertex, geometry, tessControl, tessEval, fragment);
+			key = new CacheKey(parameters, name, vertex, geometry, tessControl, tessEval, fragment);
 			if (cache.containsKey(key)) {
 				result = cache.get(key);
 			}
@@ -272,7 +279,7 @@ public class TransformPatcher {
 		CacheKey key;
 		Map<PatchShaderType, String> result = null;
 		if (useCache) {
-			key = new CacheKey(parameters, compute);
+			key = new CacheKey(parameters, name, compute);
 			if (cache.containsKey(key)) {
 				result = cache.get(key);
 			}
@@ -292,56 +299,83 @@ public class TransformPatcher {
 		return result;
 	}
 
+	public static String patchDepth(String input, ShaderType type) {
+		if (input == null) {
+			return null;
+		}
+
+		Matcher matcher = versionPattern.matcher(input);
+		if (!matcher.find()) {
+			throw new IllegalArgumentException("No #version directive found in source code!");
+		}
+
+		PatchShaderType patchType = PatchShaderType.fromGlShaderType(type)[0];
+		boolean zZeroToOne = RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
+		SingleASTTransformer<Parameters> depthTransformer = new SingleASTTransformer<>();
+		depthTransformer.setRootSupplier(RootSupplier.PREFIX_UNORDERED_ED_EXACT);
+		depthTransformer.setTokenFilter(parseTokenFilter);
+		depthTransformer.setPrintType(PrintType.SIMPLE);
+		depthTransformer.getLexer().version = Version.fromNumber(Integer.parseInt(matcher.group(1)));
+		depthTransformer.setTransformation((tree, root) -> root.indexBuildSession(() -> {
+			DepthTransformer.transform(depthTransformer, tree, root, patchType, false, zZeroToOne);
+			DepthTransformer.transformPosition(depthTransformer, Map.of(patchType, tree), zZeroToOne, false);
+		}));
+		return depthTransformer.transform(input);
+	}
+
 	public static Map<PatchShaderType, String> patchVanilla(
 		String name, String vertex, String geometry, String tessControl, String tessEval, String fragment,
 		AlphaTest alpha, boolean isLines, boolean isClouds,
 		boolean hasChunkOffset,
 		ShaderAttributeInputs inputs,
-		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
+		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides) {
 		return transform(name, vertex, geometry, tessControl, tessEval, fragment,
-			new VanillaParameters(Patch.VANILLA, textureMap, alpha, isLines, isClouds, hasChunkOffset, inputs, geometry != null, tessControl != null || tessEval != null));
+			new VanillaParameters(Patch.VANILLA, textureMap, textureOverrides, alpha, isLines, isClouds, hasChunkOffset, inputs, geometry != null, tessControl != null || tessEval != null));
 	}
 
 
 	public static Map<PatchShaderType, String> patchDHTerrain(
 		String name, String vertex, String tessControl, String tessEval, String geometry, String fragment,
-		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
+		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides) {
 		return transform(name, vertex, geometry, tessControl, tessEval, fragment,
-			new DHParameters(Patch.DH_TERRAIN, textureMap));
+			new DHParameters(Patch.DH_TERRAIN, textureMap, textureOverrides));
 	}
 
 
 	public static Map<PatchShaderType, String> patchDHGeneric(
 		String name, String vertex, String tessControl, String tessEval, String geometry, String fragment,
-		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
+		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides) {
 		return transform(name, vertex, geometry, tessControl, tessEval, fragment,
-			new DHParameters(Patch.DH_GENERIC, textureMap));
+			new DHParameters(Patch.DH_GENERIC, textureMap, textureOverrides));
 
 	}
 
 	public static Map<PatchShaderType, String> patchSodium(String name, String vertex, String geometry, String tessControl, String tessEval, String fragment,
 														   AlphaTest alpha,
-														   Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, boolean shadow) {
+														   Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides,
+														   boolean shadow) {
 		return transform(name, vertex, geometry, tessControl, tessEval, fragment,
-			new SodiumParameters(Patch.SODIUM, textureMap, alpha, shadow));
+			new SodiumParameters(Patch.SODIUM, textureMap, textureOverrides, alpha, shadow));
 	}
 
 	public static Map<PatchShaderType, String> patchComposite(
 		String name, String vertex, String geometry, String fragment,
 		TextureStage stage,
-		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
-		return transform(name, vertex, geometry, null, null, fragment, new TextureStageParameters(Patch.COMPOSITE, stage, textureMap));
+		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides) {
+		return transform(name, vertex, geometry, null, null, fragment, new TextureStageParameters(Patch.COMPOSITE, stage, textureMap, textureOverrides));
 	}
 
 	public static String patchCompute(
 		String name, String compute,
 		TextureStage stage,
-		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
-		return transformCompute(name, compute, new ComputeParameters(Patch.COMPUTE, stage, textureMap))
+		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides) {
+		return transformCompute(name, compute, new ComputeParameters(Patch.COMPUTE, stage, textureMap, textureOverrides))
 			.getOrDefault(PatchShaderType.COMPUTE, null);
 	}
 
 	private static class CacheKey {
+		final boolean zZeroToOne = RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
+		final boolean shadow;
 		final Parameters parameters;
 		final String vertex;
 		final String geometry;
@@ -350,8 +384,9 @@ public class TransformPatcher {
 		final String fragment;
 		final String compute;
 
-		public CacheKey(Parameters parameters, String vertex, String geometry, String tessControl, String tessEval, String fragment) {
+		public CacheKey(Parameters parameters, String name, String vertex, String geometry, String tessControl, String tessEval, String fragment) {
 			this.parameters = parameters;
+			this.shadow = CommonTransformer.isShadowPass(parameters, name);
 			this.vertex = vertex;
 			this.geometry = geometry;
 			this.tessControl = tessControl;
@@ -360,8 +395,9 @@ public class TransformPatcher {
 			this.compute = null;
 		}
 
-		public CacheKey(Parameters parameters, String compute) {
+		public CacheKey(Parameters parameters, String name, String compute) {
 			this.parameters = parameters;
+			this.shadow = CommonTransformer.isShadowPass(parameters, name);
 			this.vertex = null;
 			this.geometry = null;
 			this.tessControl = null;
@@ -374,6 +410,8 @@ public class TransformPatcher {
 		public int hashCode() {
 			final int prime = 31;
 			int result = 1;
+			result = prime * result + Boolean.hashCode(zZeroToOne);
+			result = prime * result + Boolean.hashCode(shadow);
 			result = prime * result + ((parameters == null) ? 0 : parameters.hashCode());
 			result = prime * result + ((vertex == null) ? 0 : vertex.hashCode());
 			result = prime * result + ((geometry == null) ? 0 : geometry.hashCode());
@@ -393,6 +431,8 @@ public class TransformPatcher {
 			if (getClass() != obj.getClass())
 				return false;
 			CacheKey other = (CacheKey) obj;
+			if (zZeroToOne != other.zZeroToOne || shadow != other.shadow)
+				return false;
 			if (parameters == null) {
 				if (other.parameters != null)
 					return false;

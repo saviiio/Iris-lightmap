@@ -10,16 +10,19 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.function.IntFunction;
 
+import static net.irisshaders.iris.vertices.IrisVertexFormats.MID_TEXTURE_ATTRIBUTE;
+import static net.irisshaders.iris.vertices.IrisVertexFormats.TANGENT_ATTRIBUTE;
+
 public class IrisTextVertexSinkImpl implements IrisTextVertexSink {
 	static final VertexFormat format = IrisVertexFormats.GLYPH;
 	private static final int STRIDE = IrisVertexFormats.GLYPH.getVertexSize();
-	private static final int OFFSET_POSITION = 0;
-	private static final int OFFSET_COLOR = 12;
-	private static final int OFFSET_TEXTURE = 16;
-	private static final int OFFSET_MID_TEXTURE = 38;
-	private static final int OFFSET_LIGHT = 24;
-	private static final int OFFSET_NORMAL = 28;
-	private static final int OFFSET_TANGENT = 46;
+	private static final int OFFSET_POSITION = getOffset("Position");
+	private static final int OFFSET_COLOR = getOffset("Color");
+	private static final int OFFSET_TEXTURE = getOffset("UV0");
+	private static final int OFFSET_MID_TEXTURE = getOffset(MID_TEXTURE_ATTRIBUTE);
+	private static final int OFFSET_LIGHT = getOffset("UV2");
+	private static final int OFFSET_NORMAL = getOffset("Normal");
+	private static final int OFFSET_TANGENT = getOffset(TANGENT_ATTRIBUTE);
 	private final ByteBuffer buffer;
 	private final TextQuadView quad = new TextQuadView();
 	private final Vector3f saveNormal = new Vector3f();
@@ -31,6 +34,12 @@ public class IrisTextVertexSinkImpl implements IrisTextVertexSink {
 	public IrisTextVertexSinkImpl(int maxQuadCount, IntFunction<ByteBuffer> buffer) {
 		this.buffer = buffer.apply(format.getVertexSize() * 4 * maxQuadCount);
 		this.elementOffset = MemoryUtil.memAddress(this.buffer);
+	}
+
+	private static int getOffset(String name) {
+		var element = IrisVertexFormats.GLYPH.getElement(name);
+		if (element == null) throw new IllegalArgumentException("Cannot find element " + name);
+		return element.offset();
 	}
 
 	@Override
@@ -58,20 +67,20 @@ public class IrisTextVertexSinkImpl implements IrisTextVertexSink {
 
 		long ptr = elementOffset;
 
-		MemoryAccess.setFloat(ptr + OFFSET_POSITION, x);
-		MemoryAccess.setFloat(ptr + OFFSET_POSITION + 4, y);
-		MemoryAccess.setFloat(ptr + OFFSET_POSITION + 8, z);
+		MemoryUtil.memPutFloat(ptr + OFFSET_POSITION, x);
+		MemoryUtil.memPutFloat(ptr + OFFSET_POSITION + 4, y);
+		MemoryUtil.memPutFloat(ptr + OFFSET_POSITION + 8, z);
 
-		MemoryAccess.setInt(ptr + OFFSET_COLOR, color);
+		MemoryUtil.memPutInt(ptr + OFFSET_COLOR, color);
 
-		MemoryAccess.setFloat(ptr + OFFSET_TEXTURE, u);
-		MemoryAccess.setFloat(ptr + OFFSET_TEXTURE + 4, v);
+		MemoryUtil.memPutFloat(ptr + OFFSET_TEXTURE, u);
+		MemoryUtil.memPutFloat(ptr + OFFSET_TEXTURE + 4, v);
 
-		MemoryAccess.setInt(ptr + OFFSET_LIGHT, light);
+		MemoryUtil.memPutInt(ptr + OFFSET_LIGHT, light);
 
-		MemoryAccess.setShort(ptr + 32, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
-		MemoryAccess.setShort(ptr + 34, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedBlockEntity());
-		MemoryAccess.setShort(ptr + 36, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedItem());
+		MemoryUtil.memPutShort(ptr + 32, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
+		MemoryUtil.memPutShort(ptr + 34, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedBlockEntity());
+		MemoryUtil.memPutShort(ptr + 36, (short) CapturedRenderingState.INSTANCE.getCurrentRenderedItem());
 
 		if (vertexCount == 4) {
 			// TODO: compute this at the head of quad()
@@ -89,10 +98,10 @@ public class IrisTextVertexSinkImpl implements IrisTextVertexSink {
 			int tangent = NormalHelper.computeTangent(normalX, normalY, normalZ, quad);
 
 			for (long vertex = 0; vertex < 4; vertex++) {
-				MemoryAccess.setFloat(ptr + OFFSET_MID_TEXTURE - STRIDE * vertex, uSum);
-				MemoryAccess.setFloat(ptr + (OFFSET_MID_TEXTURE + 4) - STRIDE * vertex, vSum);
-				MemoryAccess.setInt(ptr + OFFSET_NORMAL - STRIDE * vertex, normal);
-				MemoryAccess.setInt(ptr + OFFSET_TANGENT - STRIDE * vertex, tangent);
+				MemoryUtil.memPutFloat(ptr + OFFSET_MID_TEXTURE - STRIDE * vertex, uSum);
+				MemoryUtil.memPutFloat(ptr + (OFFSET_MID_TEXTURE + 4) - STRIDE * vertex, vSum);
+				MemoryUtil.memPutInt(ptr + OFFSET_NORMAL - STRIDE * vertex, normal);
+				MemoryUtil.memPutInt(ptr + OFFSET_TANGENT - STRIDE * vertex, tangent);
 			}
 
 			uSum = 0;
@@ -117,23 +126,23 @@ public class IrisTextVertexSinkImpl implements IrisTextVertexSink {
 		}
 
 		public float x(int index) {
-			return MemoryAccess.getFloat(writePointer - stride * (3L - index));
+			return MemoryUtil.memGetFloat(writePointer - stride * (3L - index));
 		}
 
 		public float y(int index) {
-			return MemoryAccess.getFloat(writePointer + 4 - stride * (3L - index));
+			return MemoryUtil.memGetFloat(writePointer + 4 - stride * (3L - index));
 		}
 
 		public float z(int index) {
-			return MemoryAccess.getFloat(writePointer + 8 - stride * (3L - index));
+			return MemoryUtil.memGetFloat(writePointer + 8 - stride * (3L - index));
 		}
 
 		public float u(int index) {
-			return MemoryAccess.getFloat(writePointer + 16 - stride * (3L - index));
+			return MemoryUtil.memGetFloat(writePointer + 16 - stride * (3L - index));
 		}
 
 		public float v(int index) {
-			return MemoryAccess.getFloat(writePointer + 20 - stride * (3L - index));
+			return MemoryUtil.memGetFloat(writePointer + 20 - stride * (3L - index));
 		}
 	}
 }

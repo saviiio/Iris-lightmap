@@ -1,5 +1,6 @@
 package net.irisshaders.iris.pipeline.transform.transformer;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import io.github.douira.glsl_transformer.ast.node.Identifier;
 import io.github.douira.glsl_transformer.ast.node.TranslationUnit;
 import io.github.douira.glsl_transformer.ast.node.declaration.DeclarationMember;
@@ -28,12 +29,16 @@ import io.github.douira.glsl_transformer.util.Type;
 import net.irisshaders.iris.gl.blending.AlphaTest;
 import net.irisshaders.iris.gl.shader.ShaderType;
 import net.irisshaders.iris.gl.state.ShaderAttributeInputs;
+import net.irisshaders.iris.pipeline.transform.PatchShaderType;
 import net.irisshaders.iris.pipeline.transform.parameter.Parameters;
+import net.irisshaders.iris.pipeline.transform.parameter.SodiumParameters;
+import net.irisshaders.iris.shaderpack.texture.TextureStage;
 import net.irisshaders.iris.pipeline.transform.parameter.VanillaParameters;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -93,6 +98,34 @@ public class CommonTransformer {
 		inputDeclarationTemplateLayout.markLocalReplacement(
 			inputDeclarationTemplateLayout.getSourceRoot().nodeIndex.getOne(BuiltinNumericTypeSpecifier.class));
 		inputDeclarationTemplateLayout.markIdentifierReplacement("__name");
+	}
+
+	static void injectForwardZProjection(ASTParser t, TranslationUnit tree) {
+		DepthTransformer.injectForwardZProjection(t, tree, RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
+	}
+
+	public static void transformDepth(ASTParser t, TranslationUnit tree, Root root, Parameters parameters) {
+		Set<String> textureOverrides = new HashSet<>(parameters.getTextureOverrides());
+		if (parameters.getTextureStage() != TextureStage.GBUFFERS_AND_SHADOW
+			&& (textureOverrides.contains("depthtex0") || textureOverrides.contains("gdepthtex"))) {
+			textureOverrides.add("depthtex0");
+			textureOverrides.add("gdepthtex");
+		}
+		DepthTransformer.transform(t, tree, root, parameters.type, isShadowPass(parameters, parameters.name),
+			RenderSystem.getDevice().getDeviceInfo().isZZeroToOne(), textureOverrides);
+	}
+
+	public static void transformDepthPosition(ASTParser t, Map<PatchShaderType, TranslationUnit> trees, Parameters parameters) {
+		DepthTransformer.transformPosition(t, trees, RenderSystem.getDevice().getDeviceInfo().isZZeroToOne(),
+			isShadowPass(parameters, parameters.name));
+	}
+
+	public static boolean isShadowPass(Parameters parameters, String name) {
+		if (parameters instanceof SodiumParameters sodium) {
+			return sodium.shadow;
+		}
+		return parameters.getTextureStage() == TextureStage.GBUFFERS_AND_SHADOW && name != null
+			&& (name.equals("shadow") || name.startsWith("shadow_") || name.endsWith("_shadow") || name.startsWith("dh_shadow_"));
 	}
 
 	static void renameFunctionCall(Root root, String oldName, String newName) {
@@ -212,6 +245,59 @@ public class CommonTransformer {
 			}
 		}
 		return builder.toString();
+	}
+
+	public static void replaceMidBlock(
+		ASTParser t,
+		TranslationUnit tree,
+		Root root,
+		Parameters parameters) {
+		if (parameters.type.glShaderType != ShaderType.VERTEX || !root.identifierIndex.has("at_midBlock")) {
+			return;
+		}
+
+		Type dimension = Type.F32VEC4;
+		for (Identifier id : root.identifierIndex.get("at_midBlock")) {
+			TypeAndInitDeclaration initDeclaration = (TypeAndInitDeclaration) id.getAncestor(
+				2, 0, TypeAndInitDeclaration.class::isInstance);
+			if (initDeclaration == null) {
+				continue;
+			}
+			DeclarationExternalDeclaration declaration = (DeclarationExternalDeclaration) initDeclaration.getAncestor(
+				1, 0, DeclarationExternalDeclaration.class::isInstance);
+			if (declaration == null) {
+				continue;
+			}
+			if (initDeclaration.getType().getTypeSpecifier() instanceof BuiltinNumericTypeSpecifier numeric) {
+				dimension = numeric.type;
+
+				declaration.detachAndDelete();
+				initDeclaration.detachAndDelete();
+				id.detachAndDelete();
+				break;
+			}
+		}
+
+		root.replaceReferenceExpressions(t, "at_midBlock", "iris_MidBlock");
+
+		switch (dimension) {
+			case FLOAT32:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "float iris_MidBlock = at_midBlock.x * 127.0;");
+				break;
+			case F32VEC2:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec2 iris_MidBlock = at_midBlock.xy * 127.0;");
+				break;
+			case F32VEC3:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec3 iris_MidBlock = at_midBlock.xyz * 127.0;");
+				break;
+			case F32VEC4:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec4 iris_MidBlock = at_midBlock * 127.0;");
+				break;
+			default:
+				throw new IllegalStateException("Got an invalid format at_midBlock (" + dimension.getCompactName() + ").");
+		}
+
+		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "in vec4 at_midBlock;");
 	}
 
 	public static void upgradeStorageQualifiers(

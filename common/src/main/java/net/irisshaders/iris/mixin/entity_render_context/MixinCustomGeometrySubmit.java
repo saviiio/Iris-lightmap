@@ -6,13 +6,15 @@ import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.vertices.ImmediateState;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.feature.CustomFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(SubmitNodeStorage.CustomGeometrySubmit.class)
+@Mixin(CustomFeatureRenderer.Submit.class)
 public class MixinCustomGeometrySubmit implements ModelStorage {
 	@Unique
 	private int entityId, beId, itemId;
@@ -41,7 +43,7 @@ public class MixinCustomGeometrySubmit implements ModelStorage {
 	}
 
 	@Inject(method = "<init>", at = @At("RETURN"))
-	private void iris$capture2(PoseStack.Pose pose, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer, CallbackInfo ci) {
+	private void iris$capture2(PoseStack.Pose pose, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer, CallbackInfo ci) {
 		iris$capture();
 	}
 }

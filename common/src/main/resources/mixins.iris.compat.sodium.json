@@ -18,16 +18,15 @@
     "MixinChunkVertex",
     "MixinDefaultChunkRenderer",
     "MixinDefaultFluidRenderer",
-    "MixinGlRenderDevice",
-    "MixinRenderRegionArenas",
+    "MixinChunkMeshFormats",
     "MixinRenderRegionManager",
     "MixinRenderRegion",
     "MixinRenderSectionManager",
     "MixinRenderSectionManagerShadow",
     "MixinShaderChunkRenderer",
     "MixinSodiumGameOptions",
-    "MixinSodiumWorldRenderer",
-    "MixinUniformData"
+    "MixinUniformData",
+    "MixinSodiumWorldRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

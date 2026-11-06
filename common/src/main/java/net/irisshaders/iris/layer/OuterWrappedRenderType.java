@@ -1,11 +1,15 @@
 package net.irisshaders.iris.layer;
 
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.irisshaders.iris.mixin.rendertype.RenderTypeAccessor;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.rendertype.OutputTarget;
+import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import org.jetbrains.annotations.Nullable;
@@ -58,10 +62,10 @@ public class OuterWrappedRenderType extends RenderType {
 	}
 
 	@Override
-	public void draw(MeshData meshData) {
-		extra.setup();
-		wrapped.draw(meshData);
-		extra.clear();
+	public PreparedRenderType prepare() {
+		var x = wrapped.prepare();
+		((WrappedPreparedRenderType) (Object) x).setRenderWrapper(extra);
+		return x;
 	}
 
 	@Override
@@ -90,18 +94,18 @@ public class OuterWrappedRenderType extends RenderType {
 	}
 
 	@Override
-	public int bufferSize() {
-		return wrapped.bufferSize();
-	}
-
-	@Override
 	public VertexFormat format() {
 		return wrapped.format();
 	}
 
 	@Override
-	public VertexFormat.Mode mode() {
-		return wrapped.mode();
+	public PrimitiveTopology primitiveTopology() {
+		return wrapped.primitiveTopology();
+	}
+
+	@Override
+	public OutputTarget outputTarget() {
+		return wrapped.outputTarget();
 	}
 
 	@Override

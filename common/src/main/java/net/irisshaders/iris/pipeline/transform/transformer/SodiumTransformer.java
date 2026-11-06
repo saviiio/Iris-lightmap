@@ -25,13 +25,14 @@ public class SodiumTransformer {
 
 		replaceMidTexCoord(t, tree, root, 1.0f / 32768.0f);
 		replaceMCEntity(t, tree, root);
+		CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 		boolean needsNormal = root.identifierIndex.has("gl_Normal") || root.identifierIndex.has("at_tangent");
 
 		root.replaceExpressionMatches(t, CommonTransformer.glTextureMatrix0, "mat4(1.0)");
 		root.replaceExpressionMatches(t, CommonTransformer.glTextureMatrix1, "iris_LightmapTextureMatrix");
 		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_FUNCTIONS, "uniform mat4 iris_LightmapTextureMatrix;");
-		root.rename("gl_ProjectionMatrix", "u_ProjectionMatrix");
+		root.replaceReferenceExpressions(t, "gl_ProjectionMatrix", "iris_undoRevZ(u_ProjectionMatrix)");
 
 		if (parameters.type.glShaderType == ShaderType.VERTEX) {
 			// Alias of gl_MultiTexCoord1 on 1.15+ for OptiFine
@@ -59,19 +60,24 @@ public class SodiumTransformer {
 			root.replaceReferenceExpressions(t, "at_tangent", "irs_Tangent");
 		}
 
+		// TODO: Should probably add the normal matrix as a proper uniform that's
+		// computed on the CPU-side of things
 		root.replaceReferenceExpressions(t, "gl_NormalMatrix",
-			"mat3(u_ModelViewMatrix)");
-		String objectType = parameters.shadow ? "Shadow" : "Default";
+			"iris_NormalMat");
+		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
+			"uniform mat3 iris_NormalMat;");
 
 		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
-			"uniform mat4 iris_" + objectType + "ModelViewMatrixInverse;");
+			"uniform mat4 iris_ModelViewMatInverse;");
 
 		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
-			"uniform mat4 iris_" + objectType + "ProjectionMatrixInverse;");
+			"uniform mat4 iris_ProjMatInverse;");
 
+		// TODO: All of the transformed variants of the input matrices, preferably
+		// computed on the CPU side...
 		root.rename("gl_ModelViewMatrix", "u_ModelViewMatrix");
-		root.rename("gl_ModelViewMatrixInverse", "iris_" + objectType + "ModelViewMatrixInverse");
-		root.rename("gl_ProjectionMatrixInverse", "iris_" + objectType + "ProjectionMatrixInverse");
+		root.rename("gl_ModelViewMatrixInverse", "iris_ModelViewMatInverse");
+		root.rename("gl_ProjectionMatrixInverse", "iris_ProjMatInverse");
 
 		if (parameters.type.glShaderType == ShaderType.VERTEX) {
 			// TODO: Vaporwave-Shaderpack expects that vertex positions will be aligned to
@@ -111,7 +117,9 @@ public class SodiumTransformer {
                           };""");
 
 		root.replaceReferenceExpressions(t, "gl_ModelViewProjectionMatrix",
-			"(u_ProjectionMatrix * u_ModelViewMatrix)");
+			"(iris_undoRevZ(u_ProjectionMatrix) * u_ModelViewMatrix)");
+
+		CommonTransformer.injectForwardZProjection(t, tree);
 
 		CommonTransformer.applyIntelHd4000Workaround(root);
 	}

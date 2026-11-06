@@ -15,10 +15,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GlStateManager.class)
 public class MixinGlStateManager_DepthColorOverride {
-	@Inject(method = "_colorMask", at = @At("HEAD"), cancellable = true, remap = false)
+	@Inject(method = "_colorMask(I)V", at = @At("HEAD"), cancellable = true, remap = false)
 	private static void iris$colorMaskLock(int writeMask, CallbackInfo ci) {
 		if (DepthColorStorage.isDepthColorLocked()) {
 			DepthColorStorage.deferColorMask(writeMask);
+			ci.cancel();
+		}
+	}
+	@Inject(method = "_colorMask(II)V", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void iris$colorMaskLock(int index, int writeMask, CallbackInfo ci) {
+		if (DepthColorStorage.isDepthColorLocked()) {
+			DepthColorStorage.deferColorMask(index, writeMask);
 			ci.cancel();
 		}
 	}
@@ -31,7 +38,7 @@ public class MixinGlStateManager_DepthColorOverride {
 		}
 	}
 
-	@Redirect(method = "_drawElements", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL11;glDrawElements(IIIJ)V"), remap = false)
+	@Redirect(method = "_drawElements", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL33C;glDrawElements(IIIJ)V"), remap = false)
 	private static void iris$modify(int mode, int count, int type, long indices) {
 		if (mode == GL43C.GL_TRIANGLES && ImmediateState.usingTessellation) {
 			mode = GL43C.GL_PATCHES;

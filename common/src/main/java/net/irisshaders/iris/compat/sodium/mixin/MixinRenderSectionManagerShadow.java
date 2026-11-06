@@ -3,7 +3,6 @@ package net.irisshaders.iris.compat.sodium.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.caffeinemc.mods.sodium.client.gl.device.CommandList;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
@@ -85,6 +84,9 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	private MappableRingBuffer regularUbo;
 
 	@Unique
+	private MappableRingBuffer shadowUbo;
+
+	@Unique
 	private SortedRenderLists regularRenderLists;
 
 	@Unique
@@ -103,7 +105,8 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	private boolean shadowScopeActive;
 
     @Inject(method = "<init>", at = @At("TAIL"))
-    private void initIris(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CommandList commandList, CallbackInfo ci) {
+    private void initIris(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CallbackInfo ci) {
+        this.shadowUbo = new MappableRingBuffer(() -> "Iris terrain uniform buffer (Shadow)", 130, 256);
     }
 
 	@Unique
@@ -168,7 +171,7 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	}
 
 	@Inject(method = "<init>", at = @At("TAIL"))
-	private void create(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CommandList commandList, CallbackInfo ci) {
+	private void create(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CallbackInfo ci) {
 		this.shadowTaskLists = null;
 	}
 
@@ -184,14 +187,7 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	}
 
 	@Inject(method = "prepareRenderTrees", at = @At("HEAD"), cancellable = true, remap = false)
-	private void skipAsyncCullDuringShadow(Camera camera, Viewport viewport, FogParameters fogParameters, boolean spectator, CallbackInfo ci) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			ci.cancel();
-		}
-	}
-
-	@Inject(method = "updateChunks", at = @At("HEAD"), cancellable = true, remap = false)
-	private void skipAsyncCullDuringShadow2(Viewport viewport, boolean updateImmediately, CallbackInfo ci) {
+	private void skipAsyncCullDuringShadow(Viewport viewport, FogParameters fogParameters, boolean useOcclusionCulling, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			ci.cancel();
 		}
@@ -236,7 +232,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 		this.cameraChanged = false;
 	}
 
-
 	@Redirect(method = {
 		"getRenderLists",
 		"getVisibleChunkCount"
@@ -247,5 +242,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
     @Inject(method = "destroy", at = @At("HEAD"))
     private void iris$destroy(CallbackInfo ci) {
+        if (this.shadowUbo != null) this.shadowUbo.close();
     }
 }

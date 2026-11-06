@@ -7,6 +7,8 @@ import net.irisshaders.iris.helpers.Tri;
 import net.irisshaders.iris.pipeline.transform.Patch;
 import net.irisshaders.iris.shaderpack.texture.TextureStage;
 
+import java.util.Set;
+
 public class SodiumParameters extends Parameters {
 	// WARNING: adding new fields requires updating hashCode and equals methods!
 
@@ -16,9 +18,10 @@ public class SodiumParameters extends Parameters {
 	public final boolean shadow;
 
 	public SodiumParameters(Patch patch,
-							Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap,
-							AlphaTest alpha, boolean shadow) {
-		super(patch, textureMap);
+							Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textureOverrides,
+							AlphaTest alpha,
+							boolean shadow) {
+		super(patch, textureMap, textureOverrides);
 
 		this.alpha = alpha;
 		this.shadow = shadow;
@@ -40,6 +43,7 @@ public class SodiumParameters extends Parameters {
 		final int prime = 31;
 		int result = super.hashCode();
 		result = prime * result + ((alpha == null) ? 0 : alpha.hashCode());
+		result = prime * result + (shadow ? 1231 : 1237);
 		return result;
 	}
 
@@ -53,7 +57,12 @@ public class SodiumParameters extends Parameters {
 			return false;
 		SodiumParameters other = (SodiumParameters) obj;
 		if (alpha == null) {
-			return other.alpha == null;
-		} else return alpha.equals(other.alpha);
+			if (other.alpha != null) {
+				return false;
+			}
+		} else if (!alpha.equals(other.alpha)) {
+			return false;
+		}
+		return shadow == other.shadow;
 	}
 }

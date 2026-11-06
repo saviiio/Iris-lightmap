@@ -1,10 +1,13 @@
 package net.irisshaders.iris.gl.state;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 
 import java.util.List;
+import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
+import net.irisshaders.iris.uniforms.CapturedRenderingState;
 
 public class ShaderAttributeInputs {
 	private boolean ie;
@@ -26,7 +29,14 @@ public class ShaderAttributeInputs {
 
 		this.newLines = isLines;
 
-		format.getElementAttributeNames().forEach(name -> {
+        if (format == null) {
+            // Sodium. Get current.
+            format = WorldRenderingSettings.INSTANCE.getVertexFormat().getVertexFormat();
+        }
+
+		format.getElements().forEach(n -> {
+			var name = n.name();
+
 			if ("Color".equals(name)) {
 				color = true;
 			}
@@ -54,18 +64,13 @@ public class ShaderAttributeInputs {
 
 		// Packs declare mc_Entity as a float, so it reads back zero and the transformer has to
 		// redeclare it. Zero here means there is nothing to fix.
-		List<String> names = format.getElementAttributeNames();
 		List<VertexFormatElement> elements = format.getElements();
-		for (int index = 0; index < names.size(); index++) {
+		for (int index = 0; index < elements.size(); index++) {
 			VertexFormatElement element = elements.get(index);
-			String name = names.get(index);
+			String name = element.name();
 
-			if (element.normalized() || element.type() == VertexFormatElement.Type.FLOAT) {
-				continue;
-			}
-
-			if ("mc_Entity".equals(name)) {
-				entityComponents = element.count();
+			if ("mc_Entity".equals(name) && (element.format().componentType() == GpuFormat.ComponentType.SINT_16 || element.format().componentType() == GpuFormat.ComponentType.SINT_32)) {
+				entityComponents = element.format().componentCount();
 			}
 		}
 	}
